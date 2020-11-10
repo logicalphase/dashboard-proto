@@ -15,6 +15,7 @@ option go_package = "github.com/presslabs/dashboard-go/pkg/memcached/v1";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "google/protobuf/field_mask.proto";
 import "presslabs/dashboard/affinity/v1/affinity.proto";
+import "presslabs/dashboard/toleration/v1/toleration.proto";
 
 message Memcached {
   // Fully qualified backup name in the form projects/{project_name}/memcached/{memcached_name}.
@@ -25,13 +26,16 @@ message Memcached {
   ResourceAllocation resources = 2 [(gogoproto.nullable) = false];
   // Memcached's Affinity
   presslabs.dashboard.affinity.v1.Affinity affinity = 3;
+  // Memcached's Tolerations
+  repeated presslabs.dashboard.toleration.v1.Toleration tolerations = 4 [(gogoproto.nullable) = false];
 }
 
 // ResourceAllocation for Memcached
 message ResourceAllocation {
-  Resource memory = 1 [(gogoproto.nullable) = false];
-  Resource cpu = 2 [(gogoproto.nullable) = false];
-  int32 desired_replicas = 3;
+  bool paused = 1;
+  Resource memory = 2 [(gogoproto.nullable) = false];
+  Resource cpu = 3 [(gogoproto.nullable) = false];
+  int32 desired_replicas = 4;
 }
 
 // Resource describe requested and limit resources
@@ -64,7 +68,7 @@ message UpdateMemcachedRequest {
 }
 
 message UpdateMemcachedResourcesRequest {
-  // Parent site, for example projects/{project_name}/memcached/{memcached_name}.
+  // Parent site, for example organizations/{organization_name}/projects/{project_name}/memcached/{memcached_name}.
   string parent = 1 [(gogoproto.casttype) = "Name"];
   // New definition of the site resource allocation list.
   ResourceAllocation resources = 2 [(gogoproto.nullable) = false];

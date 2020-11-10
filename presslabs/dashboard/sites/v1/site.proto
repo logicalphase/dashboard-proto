@@ -19,6 +19,7 @@ import "google/protobuf/timestamp.proto";
 import "presslabs/dashboard/affinity/v1/affinity.proto";
 import "presslabs/dashboard/api/event/v1/event.proto";
 import "presslabs/dashboard/conditions/v1/condition.proto";
+import "presslabs/dashboard/toleration/v1/toleration.proto";
 
 // Site represents a site within the presslabs dashboard context
 message Site {
@@ -71,11 +72,13 @@ message Site {
   repeated Route routes = 20 [(gogoproto.nullable) = false];
   // The site's Affinity
   presslabs.dashboard.affinity.v1.Affinity affinity = 22;
+  // The site's Tolerations
+  repeated presslabs.dashboard.toleration.v1.Toleration tolerations = 23 [(gogoproto.nullable) = false];
   // The site's Memcached resource name
   // This field is read-only, for now.
-  string memcached = 23 [(gogoproto.casttype) = "github.com/presslabs/dashboard-go/pkg/memcached/v1.Name"];
+  string memcached = 24 [(gogoproto.casttype) = "github.com/presslabs/dashboard-go/pkg/memcached/v1.Name"];
   // Page cache
-  PageCache page_cache = 24 [(gogoproto.nullable) = false];
+  PageCache page_cache = 25 [(gogoproto.nullable) = false];
 }
 
 // Status is information about the current status of this site.
@@ -87,10 +90,12 @@ message Status {
     PROVISIONING = 1;
     // Site is fully usable.
     RUNNING = 2;
+    // Site is paused.
+    PAUSED = 3;
     // Site is usable, but a component has an error.
-    WARNING = 3;
+    WARNING = 4;
     // Site is not running.
-    ERROR = 4;
+    ERROR = 5;
   }
   // Site general (overall) status.
   GeneralStatus general_status = 1;
@@ -189,11 +194,13 @@ message Autoscaler {
 
 // ResourceAllocation describes what the allocated resources for a site are
 message ResourceAllocation {
-  Resource memory_per_pod = 1 [(gogoproto.nullable) = false];
-  Resource cpu_per_pod = 2 [(gogoproto.nullable) = false];
-  Resource php_workers = 3 [(gogoproto.nullable) = false];
-  Resource php_workers_memory = 4 [(gogoproto.nullable) = false];
-  Autoscaler autoscaler = 5 [(gogoproto.nullable) = false];
+  // Set replicas on 0 for a given site, overriding the below settings
+  bool paused = 1;
+  Resource memory_per_pod = 2 [(gogoproto.nullable) = false];
+  Resource cpu_per_pod = 3 [(gogoproto.nullable) = false];
+  Resource php_workers = 4 [(gogoproto.nullable) = false];
+  Resource php_workers_memory = 5 [(gogoproto.nullable) = false];
+  Autoscaler autoscaler = 6 [(gogoproto.nullable) = false];
 }
 
 // Resource describe used and limit resources
@@ -227,14 +234,19 @@ message PageCache {
   string memcached_port = 6;
   // Prefix of the key.
   string key_prefix = 7;
+  // Query params that will be included in the page cache key
+  repeated string key_included_query_params = 8;
+  // Query params that will be discarded from the page cache key; the request uri that reaches the
+  // backend remains unaltered
+  repeated string key_discarded_query_params = 9;
   // store_statuses controls what responses to store to the cache according to their status code.
   // Responses with statuses not present in this list will not be cached.
   // Leave empty to store all statuses.
-  repeated int32 store_statuses = 8;
+  repeated int32 store_statuses = 10;
   // Response_cache_control can be on (true) or off (false).
-  bool response_cache_control = 9;
+  bool response_cache_control = 11;
   // Expiration time period for page cache.
-  uint64 expire_seconds = 10;
+  uint64 expire_seconds = 12;
 }
 
 message CreateSiteRequest {
@@ -272,7 +284,7 @@ message UpdateSiteRequest {
 }
 
 message UpdateSiteEnvVarsRequest {
-  // Parent site, for example projects/{project_name}/sites/{site_name}.
+  // Parent site, for example organizations/{organization_name}/projects/{project_name}/sites/{site_name}.
   string parent = 1 [(gogoproto.casttype) = "Name"];
   // New definition of the env vars list.
   EnvVarList env_vars = 2 [(gogoproto.nullable) = false];
@@ -284,7 +296,7 @@ message UpdateSiteEnvVarsRequest {
 }
 
 message UpdateSitePageCacheRequest {
-  // Parent site, for example projects/{project_name}/sites/{site_name}.
+  // Parent site, for example organizations/{organization_name}/projects/{project_name}/sites/{site_name}.
   string parent = 1 [(gogoproto.casttype) = "Name"];
   // New definition of the page cache.
   PageCache page_cache = 2 [(gogoproto.nullable) = false];
@@ -296,7 +308,7 @@ message UpdateSitePageCacheRequest {
 }
 
 message UpdateSiteSMTPRequest {
-  // Parent site, for example projects/{project_name}/sites/{site_name}.
+  // Parent site, for example organizations/{organization_name}/projects/{project_name}/sites/{site_name}.
   string parent = 1 [(gogoproto.casttype) = "Name"];
   // New definition of the smtp.
   SMTP smtp = 2 [
@@ -311,7 +323,7 @@ message UpdateSiteSMTPRequest {
 }
 
 message UpdateSiteResourcesRequest {
-  // Parent site, for example projects/{project_name}/sites/{site_name}.
+  // Parent site, for example organizations/{organization_name}/projects/{project_name}/sites/{site_name}.
   string parent = 1 [(gogoproto.casttype) = "Name"];
   // New definition of the site resource allocation list.
   ResourceAllocation resources = 2 [(gogoproto.nullable) = false];
@@ -333,10 +345,13 @@ message DeleteSiteRequest {
 message ListSitesRequest {
   // Parent project, for example "projects/{project_name}".
   string parent = 1 [(gogoproto.casttype) = "github.com/presslabs/dashboard-go/pkg/project/v1.Name"];
+  // Organization field can be used to list all the sites from an organization.
+  // Required if Parent is empty.
+  string organization = 2 [(gogoproto.casttype) = "github.com/presslabs/dashboard-go/pkg/organization/v1.Name"];
   // Maximum number of items to return.
-  int32 page_size = 2;
+  int32 page_size = 3;
   // Next_page_token value returned from a previous List request, if any.
-  string page_token = 3;
+  string page_token = 4;
 }
 
 message ListSitesResponse {
@@ -363,7 +378,7 @@ message ListSiteEventsResponse {
 }
 
 message UpdateSiteRoutesRequest {
-  // Parent site, for example projects/{project_name}/sites/{site_name}.
+  // Parent site, for example organizations/{organization_name}/projects/{project_name}/sites/{site_name}.
   string parent = 1 [(gogoproto.casttype) = "Name"];
   // Routes contains site domains and paths
   repeated Route routes = 2 [(gogoproto.nullable) = false];

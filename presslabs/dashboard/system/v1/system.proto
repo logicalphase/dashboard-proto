@@ -15,7 +15,9 @@ option go_package = "github.com/presslabs/dashboard-go/pkg/system/v1";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
+import "presslabs/dashboard/affinity/v1/affinity.proto";
 import "presslabs/dashboard/conditions/v1/condition.proto";
+import "presslabs/dashboard/toleration/v1/toleration.proto";
 
 // SystemStatus contains system components status
 message SystemStatus {
@@ -30,6 +32,20 @@ message SystemStatus {
 message ApplicationStatus {
   repeated ComponentStatus components = 1 [(gogoproto.nullable) = false];
   repeated presslabs.dashboard.conditions.v1.Condition conditions = 2 [(gogoproto.nullable) = false];
+  // Link for more information about the component status.
+  string link = 3;
+}
+
+// Component contains a name, a namespace, a kind and a link
+message Component {
+  // K8s resource name.
+  string name = 1 [(gogoproto.casttype) = "ComponentName"];
+  // K8s resource namespace.
+  string namespace = 2 [(gogoproto.casttype) = "ComponentNamespace"];
+  // The resource kind.
+  string kind = 3;
+  // The link for more information about the component status.
+  string link = 4;
 }
 
 // ComponentStatus is the status for the dashboard component
@@ -41,19 +57,13 @@ message ComponentStatus {
     UNKNOWN = 1;
     // component status is ready.
     READY = 2;
-    // Component status is in prorgess.
+    // Component status is in progress.
     IN_PROGRESS = 3;
   }
-  // K8s resource name.
-  string name = 1;
-  // K8s resource namespace.
-  string namespace = 2;
-  // The resource kind.
-  string kind = 3;
-  // The link for more information about the component status.
-  string link = 4;
+  // K8s component.
+  Component component = 1 [(gogoproto.nullable) = false];
   // The component status.
-  Status status = 5;
+  Status status = 2;
 }
 
 // AuthStatus is the status for the authentication system
@@ -139,6 +149,44 @@ message UpdateAdminUsersRequest {
   ];
 }
 
+message ComponentScheduling {
+  // K8s component to which the scheduling rules apply.
+  Component component = 1 [(gogoproto.nullable) = false];
+  // System's Affinity
+  presslabs.dashboard.affinity.v1.Affinity affinity = 2;
+  // System's Tolerations
+  repeated presslabs.dashboard.toleration.v1.Toleration tolerations = 3 [(gogoproto.nullable) = false];
+}
+
+message GetComponentSchedulingRequest {
+  // K8s component to fetch rules for.
+  Component component = 1 [(gogoproto.nullable) = false];
+}
+
+message UpdateComponentSchedulingRequest {
+  // Component scheduling settings.
+  ComponentScheduling component_scheduling = 1 [(gogoproto.nullable) = false];
+  // Fields to be updated.
+  google.protobuf.FieldMask update_mask = 2 [
+    (gogoproto.embed) = true,
+    (gogoproto.nullable) = false
+  ];
+}
+
+message ListComponentSchedulingsRequest {
+  // Maximum number of items to return.
+  int32 page_size = 1;
+  // Next_page_token value returned from a previous List request, if any.
+  string page_token = 2;
+}
+
+message ListComponentSchedulingsResponse {
+  repeated ComponentScheduling component_schedulings = 1 [(gogoproto.nullable) = false];
+  // Token to retrieve the next page of results, or empty if there are no
+  // more results in the list.
+  string next_page_token = 2;
+}
+
 // SystemStatusesService allow managing system components
 service SystemStatusesService {
   // GetSystemStatus fetches a dashboard installer
@@ -157,4 +205,10 @@ service SystemStatusesService {
   rpc GetAdminUsers(google.protobuf.Empty) returns (AdminUsersResponse);
   // UpdateAdminUsers updates the admin users
   rpc UpdateAdminUsers(UpdateAdminUsersRequest) returns (AdminUsersResponse);
+  // GetComponentScheduling fetches the component's scheduling configuration
+  rpc GetComponentScheduling(GetComponentSchedulingRequest) returns (ComponentScheduling);
+  // UpdateComponentScheduling updates component's scheduling configuration
+  rpc UpdateComponentScheduling(UpdateComponentSchedulingRequest) returns (ComponentScheduling);
+  // ListComponentSchedulings lists component's scheduling configurations
+  rpc ListComponentSchedulings(ListComponentSchedulingsRequest) returns (ListComponentSchedulingsResponse);
 }
